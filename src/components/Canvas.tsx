@@ -1,5 +1,5 @@
-import { useRef, useEffect, useCallback, useState } from "react";
-import { CanvasEngine, CANVAS_W, CANVAS_H } from "../engine/canvas-engine";
+import { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import { CanvasEngine, DISPLAY_PIXEL_SIZE } from "../engine/canvas-engine";
 import { zoomAt, clampViewport, fitToScreen } from "../engine/viewport";
 import { useCanvasStore } from "../store/canvas-store";
 import type { Viewport } from "../types/canvas";
@@ -11,16 +11,22 @@ interface CanvasProps {
 export function Canvas({ onEngineReady }: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<CanvasEngine | null>(null);
   const panStartRef = useRef<{ x: number; y: number; vp: Viewport } | null>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
   const { viewport, isPanning, setViewport, setIsPanning } = useCanvasStore();
 
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    const engine = new CanvasEngine(canvasRef.current);
-    onEngineReady(engine);
-  }, [onEngineReady]);
+  const pixelFieldSize = useMemo(
+    () => ({
+      w: containerSize.w > 0 ? Math.max(120, Math.ceil(containerSize.w / DISPLAY_PIXEL_SIZE)) : 0,
+      h: containerSize.h > 0 ? Math.max(120, Math.ceil(containerSize.h / DISPLAY_PIXEL_SIZE)) : 0,
+    }),
+    [containerSize.h, containerSize.w]
+  );
+
+  const displayWidth = pixelFieldSize.w * DISPLAY_PIXEL_SIZE;
+  const displayHeight = pixelFieldSize.h * DISPLAY_PIXEL_SIZE;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -33,10 +39,22 @@ export function Canvas({ onEngineReady }: CanvasProps) {
   }, []);
 
   useEffect(() => {
-    if (containerSize.w > 0 && containerSize.h > 0) {
-      setViewport(fitToScreen(containerSize.w, containerSize.h));
-    }
-  }, [containerSize, setViewport]);
+    if (!canvasRef.current || containerSize.w <= 0 || containerSize.h <= 0 || engineRef.current) return;
+
+    const logicalWidth = pixelFieldSize.w;
+    const logicalHeight = pixelFieldSize.h;
+    const engine = new CanvasEngine(canvasRef.current, logicalWidth, logicalHeight);
+    engineRef.current = engine;
+    onEngineReady(engine);
+    setViewport(
+      fitToScreen(
+        containerSize.w,
+        containerSize.h,
+        logicalWidth * DISPLAY_PIXEL_SIZE,
+        logicalHeight * DISPLAY_PIXEL_SIZE
+      )
+    );
+  }, [onEngineReady, pixelFieldSize.h, pixelFieldSize.w, setViewport]);
 
   const handlePointerDown = useCallback(
     (event: React.PointerEvent) => {
@@ -56,7 +74,7 @@ export function Canvas({ onEngineReady }: CanvasProps) {
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent) => {
-      if (!panStartRef.current) return;
+      if (!panStartRef.current || !engineRef.current) return;
 
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -74,7 +92,9 @@ export function Canvas({ onEngineReady }: CanvasProps) {
             offsetY: panStartRef.current.vp.offsetY + dy,
           },
           containerSize.w,
-          containerSize.h
+          containerSize.h,
+          engineRef.current.width * DISPLAY_PIXEL_SIZE,
+          engineRef.current.height * DISPLAY_PIXEL_SIZE
         )
       );
     },
@@ -88,6 +108,7 @@ export function Canvas({ onEngineReady }: CanvasProps) {
 
   const handleWheel = useCallback(
     (event: React.WheelEvent) => {
+      if (!engineRef.current) return;
       event.preventDefault();
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
@@ -95,7 +116,15 @@ export function Canvas({ onEngineReady }: CanvasProps) {
       const sx = event.clientX - rect.left;
       const sy = event.clientY - rect.top;
       const nextViewport = zoomAt(viewport, sx, sy, event.deltaY);
-      setViewport(clampViewport(nextViewport, containerSize.w, containerSize.h));
+      setViewport(
+        clampViewport(
+          nextViewport,
+          containerSize.w,
+          containerSize.h,
+          engineRef.current.width * DISPLAY_PIXEL_SIZE,
+          engineRef.current.height * DISPLAY_PIXEL_SIZE
+        )
+      );
     },
     [containerSize.h, containerSize.w, setViewport, viewport]
   );
@@ -135,19 +164,21 @@ export function Canvas({ onEngineReady }: CanvasProps) {
         className="absolute origin-top-left"
         style={{
           transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.zoom})`,
-          width: CANVAS_W,
-          height: CANVAS_H,
-          imageRendering: viewport.zoom > 3 ? "pixelated" : "auto",
-          borderRadius: 12 / Math.max(viewport.zoom, 0.5),
+          width: displayWidth,
+          height: displayHeight,
+          imageRendering: "pixelated",
           overflow: "hidden",
-          boxShadow: "0 8px 48px rgba(0,0,0,0.11), 0 2px 12px rgba(0,0,0,0.08)",
         }}
       >
         <canvas
           ref={canvasRef}
           className="block"
-          style={{ width: CANVAS_W, height: CANVAS_H }}
+          style={{ width: displayWidth, height: displayHeight }}
         />
+      </div>
+
+      <div className="absolute top-18 left-4 rounded-full bg-black/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-white/80">
+        2x2 pixel field
       </div>
 
       <div className="absolute bottom-12 right-4 text-text-primary/24 text-[10px] font-bold select-none tabular-nums">

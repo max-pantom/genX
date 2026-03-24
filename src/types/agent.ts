@@ -1,5 +1,3 @@
-import type { Mode } from "./canvas";
-
 export type AgentState = "idle" | "running" | "paused" | "observing";
 
 export type AgentMood =
@@ -38,6 +36,8 @@ export interface AgentDrives {
 }
 
 export interface CanvasMetrics {
+  canvasWidth: number;
+  canvasHeight: number;
   density: number;
   contrast: number;
   entropy: number;
@@ -86,7 +86,6 @@ export interface BurstResult {
   beforeMetrics: CanvasMetrics;
   afterMetrics: CanvasMetrics;
   actionCount: number;
-  mode: Mode;
   regionId: string;
   rolledBack: boolean;
 }
@@ -100,7 +99,6 @@ export interface CriticNote {
 export interface BurstMemory {
   id: string;
   timestamp: number;
-  mode: Mode;
   mood: AgentMood;
   dominantDrive: DriveName;
   regionId: string;
@@ -113,7 +111,6 @@ export interface BurstMemory {
 export interface TendencyProfile {
   preferredTheme: SeedThemeKey;
   favoredRegions: Record<string, number>;
-  favoredModes: Record<Mode, number>;
   paletteDriftBias: number;
   successfulActionPairs: Record<string, number>;
   totalBursts: number;
@@ -136,7 +133,6 @@ export interface AgentConfig {
   burstMin: number;
   burstMax: number;
   criticInterval: number;
-  modePreference: Mode | "auto";
   seedTheme: SeedThemeKey;
 }
 
@@ -147,7 +143,6 @@ export interface LLMConfig {
 }
 
 export interface AgentInternalState {
-  currentMode: Mode;
   confidence: number;
   tick: number;
   burstCount: number;
@@ -160,7 +155,6 @@ export interface AgentInternalState {
   shortMemory: BurstMemory[];
   tendencyProfile: TendencyProfile;
   currentRegion: RegionMetrics | null;
-  modeCooldown: number;
   negativeStreak: number;
   lastBurstResult: BurstResult | null;
   currentThought: string;

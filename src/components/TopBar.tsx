@@ -82,7 +82,7 @@ export function TopBar({ engine }: TopBarProps) {
           className={cn(
             "px-5 py-2 text-xs font-bold uppercase tracking-wide rounded-full transition-colors",
             state === "running"
-              ? "bg-accent-mutate text-white"
+              ? "bg-accent-alert text-white"
               : "bg-white text-text-primary shadow-sm hover:shadow"
           )}
         >

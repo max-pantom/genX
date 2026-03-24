@@ -23,7 +23,7 @@ interface AgentStore {
   logs: Array<{
     text: string;
     timestamp: number;
-    type: "action" | "thought" | "mode" | "critic";
+    type: "action" | "thought" | "critic";
   }>;
   availableModels: string[];
   ollamaConnected: boolean;
@@ -32,7 +32,7 @@ interface AgentStore {
   setConfig: (config: Partial<AgentConfig>) => void;
   setLLMConfig: (config: Partial<LLMConfig>) => void;
   updateInternal: (partial: Partial<AgentInternalState>) => void;
-  addLog: (text: string, type: "action" | "thought" | "mode" | "critic") => void;
+  addLog: (text: string, type: "action" | "thought" | "critic") => void;
   clearLogs: () => void;
   setAvailableModels: (models: string[]) => void;
   setOllamaConnected: (connected: boolean) => void;
@@ -50,7 +50,6 @@ const defaultConfig: AgentConfig = {
   burstMin: 3,
   burstMax: 8,
   criticInterval: 6,
-  modePreference: "auto",
   seedTheme: "none",
 };
 

@@ -55,10 +55,7 @@ async function runBurst(engine: CanvasEngine, manual = false) {
   });
 
   store.addLog(plan.thought, "thought");
-  store.addLog(
-    `${plan.mode} -> region ${plan.region.id} -> ${plan.actions.length} actions`,
-    "mode"
-  );
+  store.addLog(`region ${plan.region.id} -> ${plan.actions.length} pixel actions`, "thought");
 
   engine.pushSnapshot();
 
@@ -68,14 +65,11 @@ async function runBurst(engine: CanvasEngine, manual = false) {
     store.addLog(action.type, "action");
   }
 
-  useCanvasStore.getState().setMode(plan.mode);
-
   const after = observeCanvas(engine, useCanvasStore.getState().history);
   let result = scoreBurst({
     before,
     after,
     dominantDrive: plan.dominantDrive,
-    mode: plan.mode,
     region: plan.region,
     actionCount: plan.actions.length,
   });
@@ -102,7 +96,6 @@ async function runBurst(engine: CanvasEngine, manual = false) {
   store.updateInternal({
     tick: store.internal.tick + 1,
     burstCount: store.internal.burstCount + 1,
-    currentMode: plan.mode,
     confidence: plan.confidence,
     mood: plan.mood,
     dominantDrive: plan.dominantDrive,
@@ -110,7 +103,6 @@ async function runBurst(engine: CanvasEngine, manual = false) {
     metrics: rolledBack ? before : after,
     regionStates: plan.nextRegionStates,
     currentRegion: plan.region,
-    modeCooldown: plan.nextModeCooldown,
     negativeStreak: rolledBack ? 0 : nextNegativeStreak,
     shortMemory: [...store.internal.shortMemory.slice(-49), memory],
     tendencyProfile,
@@ -144,7 +136,7 @@ async function runSlowCritic(token: number) {
 
   const memorySummary = store.internal.shortMemory
     .slice(-5)
-    .map((entry) => `${entry.label} ${entry.mode} ${entry.regionId}: ${entry.reason}`)
+    .map((entry) => `${entry.label} ${entry.regionId}: ${entry.reason}`)
     .join("\n");
 
   const messages: ChatMessage[] = [
@@ -158,7 +150,6 @@ async function runSlowCritic(token: number) {
       content: [
         `Mood: ${store.internal.mood}`,
         `Dominant drive: ${store.internal.dominantDrive}`,
-        `Current mode: ${store.internal.currentMode}`,
         `Metrics: density=${metrics.density.toFixed(2)}, contrast=${metrics.contrast.toFixed(2)}, entropy=${metrics.entropy.toFixed(2)}, focal=${metrics.focalStrength.toFixed(2)}, repetition=${metrics.repetition.toFixed(2)}, cohesion=${metrics.paletteCohesion.toFixed(2)}`,
         `Summary: ${metrics.summary}`,
         "Recent bursts:",

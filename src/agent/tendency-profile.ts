@@ -6,7 +6,6 @@ export function createDefaultTendencyProfile(): TendencyProfile {
   return {
     preferredTheme: "none",
     favoredRegions: {},
-    favoredModes: { compose: 0, mutate: 0 },
     paletteDriftBias: 0.5,
     successfulActionPairs: {},
     totalBursts: 0,
@@ -24,10 +23,6 @@ export function loadTendencyProfile(): TendencyProfile {
       ...createDefaultTendencyProfile(),
       ...parsed,
       favoredRegions: parsed.favoredRegions ?? {},
-      favoredModes: {
-        compose: parsed.favoredModes?.compose ?? 0,
-        mutate: parsed.favoredModes?.mutate ?? 0,
-      },
       successfulActionPairs: parsed.successfulActionPairs ?? {},
     };
   } catch {
@@ -66,17 +61,8 @@ export function updateTendencyProfile(
         memory.score
       ),
     },
-    favoredModes: {
-      compose: profile.favoredModes.compose,
-      mutate: profile.favoredModes.mutate,
-    },
     successfulActionPairs: { ...profile.successfulActionPairs },
   };
-
-  next.favoredModes[memory.mode] = clampModeScore(
-    profile.favoredModes[memory.mode],
-    memory.score
-  );
 
   for (let i = 0; i < memory.actionTypes.length - 1; i++) {
     const key = `${memory.actionTypes[i]}->${memory.actionTypes[i + 1]}`;
@@ -95,10 +81,6 @@ function clamp(value: number, min: number, max: number) {
 
 function clampRegionScore(previous: number, score: number) {
   return clamp(previous * 0.9 + score * 0.3, -1, 1.5);
-}
-
-function clampModeScore(previous: number, score: number) {
-  return clamp(previous * 0.92 + score * 0.25, -1, 1.5);
 }
 
 function clampPairScore(previous: number, score: number) {

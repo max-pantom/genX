@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { useCanvasStore } from "../store/canvas-store";
 import { useAgentStore } from "../store/agent-store";
-import { CANVAS_W, CANVAS_H, type CanvasEngine } from "../engine/canvas-engine";
+import { DISPLAY_PIXEL_SIZE, type CanvasEngine } from "../engine/canvas-engine";
 
 interface MinimapProps {
   engine: CanvasEngine | null;
@@ -38,19 +38,19 @@ export function Minimap({ engine }: MinimapProps) {
 
       if (internal.currentRegion) {
         const current = internal.currentRegion;
-        const scaleX = MINIMAP_SIZE / CANVAS_W;
-        const scaleY = MINIMAP_SIZE / CANVAS_H;
+        const scaleX = MINIMAP_SIZE / engine.width;
+        const scaleY = MINIMAP_SIZE / engine.height;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.strokeRect(current.x * scaleX, current.y * scaleY, current.w * scaleX, current.h * scaleY);
       }
 
-      const scaleX = MINIMAP_SIZE / CANVAS_W;
-      const scaleY = MINIMAP_SIZE / CANVAS_H;
+      const scaleX = MINIMAP_SIZE / engine.width;
+      const scaleY = MINIMAP_SIZE / engine.height;
       const vpX = (-viewport.offsetX / viewport.zoom) * scaleX;
       const vpY = (-viewport.offsetY / viewport.zoom) * scaleY;
-      const vpW = (window.innerWidth / viewport.zoom) * scaleX;
-      const vpH = (window.innerHeight / viewport.zoom) * scaleY;
+      const vpW = (window.innerWidth / viewport.zoom / DISPLAY_PIXEL_SIZE) * scaleX;
+      const vpH = (window.innerHeight / viewport.zoom / DISPLAY_PIXEL_SIZE) * scaleY;
 
       ctx.strokeStyle = "rgba(0,0,0,0.35)";
       ctx.lineWidth = 1.5;

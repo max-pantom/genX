@@ -1,39 +1,15 @@
 import type { Viewport } from "../types/canvas";
-import { CANVAS_W, CANVAS_H } from "./canvas-engine";
-
-export function screenToCanvas(
-  screenX: number,
-  screenY: number,
-  viewport: Viewport
-): { x: number; y: number } {
-  return {
-    x: (screenX - viewport.offsetX) / viewport.zoom,
-    y: (screenY - viewport.offsetY) / viewport.zoom,
-  };
-}
-
-export function canvasToScreen(
-  canvasX: number,
-  canvasY: number,
-  viewport: Viewport
-): { x: number; y: number } {
-  return {
-    x: canvasX * viewport.zoom + viewport.offsetX,
-    y: canvasY * viewport.zoom + viewport.offsetY,
-  };
-}
 
 export function fitToScreen(
   containerW: number,
   containerH: number,
-  padding = 40
+  canvasW: number,
+  canvasH: number
 ): Viewport {
-  const scaleX = (containerW - padding * 2) / CANVAS_W;
-  const scaleY = (containerH - padding * 2) / CANVAS_H;
-  const zoom = Math.min(scaleX, scaleY);
+  const zoom = 1;
   return {
-    offsetX: (containerW - CANVAS_W * zoom) / 2,
-    offsetY: (containerH - CANVAS_H * zoom) / 2,
+    offsetX: (containerW - canvasW) / 2,
+    offsetY: (containerH - canvasH) / 2,
     zoom,
   };
 }
@@ -45,7 +21,7 @@ export function zoomAt(
   delta: number
 ): Viewport {
   const factor = delta > 0 ? 0.9 : 1.1;
-  const newZoom = Math.max(0.1, Math.min(20, viewport.zoom * factor));
+  const newZoom = Math.max(0.4, Math.min(20, viewport.zoom * factor));
   const ratio = newZoom / viewport.zoom;
   return {
     zoom: newZoom,
@@ -57,10 +33,12 @@ export function zoomAt(
 export function clampViewport(
   viewport: Viewport,
   containerW: number,
-  containerH: number
+  containerH: number,
+  canvasW: number,
+  canvasH: number
 ): Viewport {
-  const canvasScreenW = CANVAS_W * viewport.zoom;
-  const canvasScreenH = CANVAS_H * viewport.zoom;
+  const canvasScreenW = canvasW * viewport.zoom;
+  const canvasScreenH = canvasH * viewport.zoom;
   const margin = 100;
 
   let { offsetX, offsetY } = viewport;

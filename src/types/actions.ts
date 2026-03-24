@@ -3,41 +3,48 @@ export interface Point {
   y: number;
 }
 
+export interface RGBAColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
 export type ComposeAction =
-  | { type: "fillCanvas"; color: string }
-  | { type: "drawLine"; from: Point; to: Point; color: string; width: number }
+  | { type: "clearCanvas"; color: RGBAColor }
   | {
-      type: "drawRect";
+      type: "fillRegion";
       x: number;
       y: number;
       w: number;
       h: number;
-      color: string;
-      fill: boolean;
+      color: RGBAColor;
     }
   | {
-      type: "drawCircle";
-      x: number;
-      y: number;
-      radius: number;
-      color: string;
-      fill: boolean;
+      type: "pixelLine";
+      from: Point;
+      to: Point;
+      color: RGBAColor;
+      width: number;
+      jitter: number;
+      density: number;
     }
   | {
-      type: "brushStroke";
+      type: "pixelSpray";
       points: Point[];
-      color: string;
+      color: RGBAColor;
       size: number;
       opacity: number;
-    }
-  | { type: "erase"; points: Point[]; size: number };
+      scatter: number;
+      density: number;
+    };
 
 export type MutateAction =
-  | { type: "setPixel"; x: number; y: number; color: string }
+  | { type: "setPixel"; x: number; y: number; color: RGBAColor }
   | {
       type: "pixelBrush";
       points: Point[];
-      color: string;
+      color: RGBAColor;
       size: number;
       opacity: number;
       scatter: number;
@@ -101,6 +108,5 @@ export interface ActionRecord {
   id: string;
   action: CanvasAction;
   timestamp: number;
-  mode: "compose" | "mutate";
   source: "agent" | "human";
 }

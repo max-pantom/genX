@@ -132,6 +132,8 @@ export function analyzeImageData(
   const balanceY = normalizedBalance(topWeight, bottomWeight);
 
   return {
+    canvasWidth: width,
+    canvasHeight: height,
     density,
     contrast,
     entropy,
@@ -246,9 +248,6 @@ function estimateRepetition(history: ActionRecord[], regionMetrics: RegionMetric
   const recent = history.slice(-12);
   if (recent.length === 0) return 0;
   const actionTypeDiversity = new Set(recent.map((entry) => entry.action.type)).size / recent.length;
-  const modeChanges =
-    recent.slice(1).filter((entry, index) => entry.mode !== recent[index].mode).length /
-    Math.max(1, recent.length - 1);
   const focalSpread =
     [...regionMetrics]
       .sort((a, b) => b.focalWeight - a.focalWeight)
@@ -256,7 +255,7 @@ function estimateRepetition(history: ActionRecord[], regionMetrics: RegionMetric
       .reduce((sum, region) => sum + region.id.split("-").reduce((n, part) => n + Number(part), 0), 0) /
     20;
 
-  return clamp(1 - actionTypeDiversity * 0.55 - modeChanges * 0.25 - focalSpread * 0.2, 0, 1);
+  return clamp(1 - actionTypeDiversity * 0.75 - focalSpread * 0.25, 0, 1);
 }
 
 function estimateSymmetry(data: Uint8ClampedArray, width: number, height: number) {

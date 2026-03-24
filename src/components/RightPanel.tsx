@@ -61,9 +61,9 @@ export function RightPanel() {
           <LabelValue label="Status" value={state} />
           <LabelValue label="Mood" value={internal.mood} />
           <LabelValue label="Drive" value={internal.dominantDrive} />
-          <LabelValue label="Mode" value={internal.currentMode} />
           <LabelValue label="Bursts" value={String(internal.burstCount)} />
           <LabelValue label="Region" value={internal.currentRegion?.id ?? "none"} />
+          <LabelValue label="Pixels" value={metrics ? `${metrics.canvasWidth}x${metrics.canvasHeight}` : "pending"} />
           <LabelValue label="Confidence" value={`${Math.round(internal.confidence * 100)}%`} />
           <LabelValue label="Last score" value={lastBurst ? `${lastBurst.label} ${lastBurst.score.toFixed(2)}` : "none"} />
         </div>
@@ -153,7 +153,7 @@ export function RightPanel() {
             <div
               className={cn(
                 "size-2 rounded-full",
-                ollamaConnected ? "bg-bright-green" : "bg-accent-mutate"
+                ollamaConnected ? "bg-bright-green" : "bg-accent-alert"
               )}
             />
             <span className="text-[9px] font-bold uppercase tracking-wide text-text-muted">
@@ -230,9 +230,7 @@ export function RightPanel() {
                   log.type === "action"
                     ? "text-text-secondary"
                     : log.type === "critic"
-                    ? "text-accent-compose"
-                    : log.type === "mode"
-                    ? "text-accent-mutate"
+                    ? "text-accent-primary"
                     : "text-text-muted"
                 )}
               >

@@ -10,10 +10,10 @@
   --color-text-primary: #1a1a1a;
   --color-text-secondary: #555555;
   --color-text-muted: #999999;
-  --color-accent-compose: #3b82f6;
-  --color-accent-mutate: #ef4444;
-  --color-accent-compose-dim: #dbeafe;
-  --color-accent-mutate-dim: #fee2e2;
+  --color-accent-primary: #3b82f6;
+  --color-accent-alert: #ef4444;
+  --color-accent-primary-dim: #dbeafe;
+  --color-accent-alert-dim: #fee2e2;
   --color-hot-pink: #f7a8c4;
   --color-bright-orange: #f97316;
   --color-bright-yellow: #facc15;

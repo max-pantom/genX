@@ -12,10 +12,10 @@ export function BottomStrip() {
           className={cn(
             "size-2 rounded-full",
             internal.lastBurstResult?.label === "hurt"
-              ? "bg-accent-mutate"
-              : internal.currentMode === "compose"
-              ? "bg-accent-compose"
-              : "bg-accent-mutate"
+              ? "bg-accent-alert"
+              : internal.lastBurstResult?.label === "helped"
+              ? "bg-bright-green"
+              : "bg-accent-primary"
           )}
         />
         <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-text-primary/40">
@@ -39,13 +39,11 @@ export function BottomStrip() {
                 burst.label === "helped"
                   ? "var(--color-bright-green)"
                   : burst.label === "hurt"
-                  ? "var(--color-accent-mutate)"
-                  : burst.mode === "compose"
-                  ? "var(--color-accent-compose-dim)"
-                  : "var(--color-accent-mutate-dim)",
+                  ? "var(--color-accent-alert)"
+                  : "var(--color-accent-primary-dim)",
               opacity: 0.35 + ((index + 1) / recentBursts.length) * 0.65,
             }}
-            title={`${burst.mode} · ${burst.regionId} · ${burst.reason}`}
+            title={`${burst.regionId} · ${burst.reason}`}
           />
         ))}
       </div>
