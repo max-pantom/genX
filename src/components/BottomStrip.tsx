@@ -1,0 +1,63 @@
+import { useAgentStore } from "../store/agent-store";
+import { cn } from "../lib/utils";
+
+export function BottomStrip() {
+  const { internal } = useAgentStore();
+  const recentBursts = internal.shortMemory.slice(-48);
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 z-20 h-12 flex items-center px-4 gap-3 bg-white/18 backdrop-blur-sm">
+      <div className="flex items-center gap-2 shrink-0">
+        <div
+          className={cn(
+            "size-2 rounded-full",
+            internal.lastBurstResult?.label === "hurt"
+              ? "bg-accent-mutate"
+              : internal.currentMode === "compose"
+              ? "bg-accent-compose"
+              : "bg-accent-mutate"
+          )}
+        />
+        <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-text-primary/40">
+          Burst Timeline
+        </span>
+      </div>
+
+      <div className="flex-1 flex items-end gap-px h-6 overflow-hidden">
+        {recentBursts.length === 0 && (
+          <span className="text-[10px] text-text-muted/35 font-medium">
+            No bursts yet
+          </span>
+        )}
+        {recentBursts.map((burst, index) => (
+          <div
+            key={burst.id}
+            className="flex-1 min-w-[3px] rounded-t-sm transition-colors"
+            style={{
+              height: `${35 + ((index + 1) / recentBursts.length) * 60}%`,
+              backgroundColor:
+                burst.label === "helped"
+                  ? "var(--color-bright-green)"
+                  : burst.label === "hurt"
+                  ? "var(--color-accent-mutate)"
+                  : burst.mode === "compose"
+                  ? "var(--color-accent-compose-dim)"
+                  : "var(--color-accent-mutate-dim)",
+              opacity: 0.35 + ((index + 1) / recentBursts.length) * 0.65,
+            }}
+            title={`${burst.mode} · ${burst.regionId} · ${burst.reason}`}
+          />
+        ))}
+      </div>
+
+      <div className="shrink-0 text-right">
+        <div className="text-[10px] font-bold text-text-primary/35 tabular-nums">
+          {internal.burstCount}
+        </div>
+        <div className="text-[9px] uppercase tracking-wide text-text-muted/35">
+          bursts
+        </div>
+      </div>
+    </div>
+  );
+}

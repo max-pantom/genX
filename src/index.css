@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas-bg: #f0f0ec;
+  --color-surface: #f7a8c4;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffffcc;
+  --color-border-subtle: #00000010;
+  --color-border-default: #00000020;
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #555555;
+  --color-text-muted: #999999;
+  --color-accent-compose: #3b82f6;
+  --color-accent-mutate: #ef4444;
+  --color-accent-compose-dim: #dbeafe;
+  --color-accent-mutate-dim: #fee2e2;
+  --color-hot-pink: #f7a8c4;
+  --color-bright-orange: #f97316;
+  --color-bright-yellow: #facc15;
+  --color-bright-green: #22c55e;
+  --color-deep-blue: #2563eb;
+}
+
+@font-face {
+  font-family: "GenX";
+  src: local("SF Pro Rounded"), local("SF Pro Display"), local("Inter"), local("system-ui");
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: "SF Pro Rounded", "SF Pro Display", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00000015;
+  border-radius: 4px;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 24px;
+}
+
+input[type="range"]::-webkit-slider-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #00000012;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  margin-top: -6px;
+}
