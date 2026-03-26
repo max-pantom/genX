@@ -7,15 +7,11 @@ interface CanvasStore {
   history: ActionRecord[];
   historyIndex: number;
   isPanning: boolean;
-  showMinimap: boolean;
-  showRightPanel: boolean;
 
   setViewport: (viewport: Viewport) => void;
   pushAction: (action: CanvasAction, source: "agent" | "human") => void;
   rewindHistory: (count: number) => void;
   setIsPanning: (v: boolean) => void;
-  toggleMinimap: () => void;
-  toggleRightPanel: () => void;
   clearHistory: () => void;
 }
 
@@ -24,8 +20,6 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
   history: [],
   historyIndex: -1,
   isPanning: false,
-  showMinimap: true,
-  showRightPanel: true,
 
   setViewport: (viewport) => set({ viewport }),
 
@@ -48,7 +42,5 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
     }),
 
   setIsPanning: (v) => set({ isPanning: v }),
-  toggleMinimap: () => set((store) => ({ showMinimap: !store.showMinimap })),
-  toggleRightPanel: () => set((store) => ({ showRightPanel: !store.showRightPanel })),
   clearHistory: () => set({ history: [], historyIndex: -1 }),
 }));

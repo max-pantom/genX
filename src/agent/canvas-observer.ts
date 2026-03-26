@@ -74,9 +74,10 @@ export function analyzeImageData(
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
+      const a = data[i + 3] / 255;
       const bright = (r + g + b) / 3 / 255;
-      const bgDist = backgroundDistance(r, g, b);
-      const density = clamp(bgDist / 255, 0, 1);
+      const bgNorm = backgroundDistance(r, g, b) / 765;
+      const density = clamp(a * bgNorm, 0, 1);
       const edge = sampleEdgeActivity(data, width, height, x, y);
       const regionIndex =
         Math.min(GRID_SIZE - 1, Math.floor(y / cellH)) * GRID_SIZE +

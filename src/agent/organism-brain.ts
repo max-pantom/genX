@@ -55,6 +55,9 @@ export function createInitialInternalState(
     negativeStreak: 0,
     lastBurstResult: null,
     currentThought: "waiting for the pixel field",
+    obsessions: [],
+    grudges: [],
+    forbiddenRegions: [],
   };
 }
 
@@ -78,7 +81,8 @@ export function planBurst(input: {
     input.metrics.regionMetrics,
     regionStates,
     input.internal.currentRegion,
-    input.internal.tendencyProfile
+    input.internal.tendencyProfile,
+    input.metrics
   );
   const burstSize = selectBurstSize(input.config, mood, dominantDrive);
   const palette = paletteForPlan(input.config.seedTheme, input.internal.tendencyProfile);
@@ -130,6 +134,42 @@ export function scoreBurst(input: {
   };
 }
 
+/** Merge LLM-chosen actions with evolved drives / region attention (LLM output alone is incomplete). */
+export function completeLlmBurstPlan(input: {
+  internal: AgentInternalState;
+  metrics: CanvasMetrics;
+  critic: CriticNote | null;
+  mood: AgentMood;
+  dominantDrive: DriveName;
+  region: RegionMetrics;
+  actions: CanvasAction[];
+  thought: string;
+  confidence: number;
+}): BurstPlan {
+  const drives = updateDrives(input.metrics, input.internal.drives, input.critic);
+  const regionStates = evolveRegionStates(
+    input.internal.regionStates,
+    input.metrics.regionMetrics,
+    input.internal.currentRegion?.id ?? null,
+    input.internal.lastBurstResult?.score ?? 0,
+    input.internal.burstCount
+  );
+  return {
+    mood: input.mood,
+    dominantDrive: input.dominantDrive,
+    drives,
+    region: input.region,
+    actions: input.actions,
+    thought: input.thought,
+    confidence: input.confidence,
+    nextRegionStates: regionStates.map((state) =>
+      state.id === input.region.id
+        ? { ...state, attention: clamp(state.attention + 0.22, 0, 1), neglect: 0 }
+        : state
+    ),
+  };
+}
+
 export function createBurstMemory(plan: BurstPlan, result: BurstResult): BurstMemory {
   return {
     id: crypto.randomUUID(),
@@ -141,6 +181,14 @@ export function createBurstMemory(plan: BurstPlan, result: BurstResult): BurstMe
     label: result.label,
     reason: result.reason,
     actionTypes: plan.actions.map((action) => action.type),
+  };
+}
+
+export function unstableMemorySnapshot(profile: TendencyProfile) {
+  return {
+    obsessions: topRegionKeys(profile.obsessedRegions, 3, 0.2),
+    grudges: topRegionKeys(profile.grudgeRegions, 3, 0.2),
+    forbiddenRegions: topRegionKeys(profile.forbiddenRegions, 2, 0.22),
   };
 }
 
@@ -196,34 +244,63 @@ function selectRegion(
   regions: RegionMetrics[],
   regionStates: RegionState[],
   currentRegion: RegionMetrics | null,
-  tendencyProfile: TendencyProfile
+  tendencyProfile: TendencyProfile,
+  metrics: CanvasMetrics
 ) {
   if (currentRegion) {
     const state = regionStates.find((entry) => entry.id === currentRegion.id);
-    if (state && state.attention > 0.36 && state.neglect < 0.2) {
+    if (state && state.attention > 0.8 && state.neglect < 0.08 && Math.random() < 0.28) {
       return regions.find((region) => region.id === currentRegion.id) ?? currentRegion;
     }
   }
 
-  return [...regions].sort(
-    (a, b) => regionPriority(b, regionStates, tendencyProfile) - regionPriority(a, regionStates, tendencyProfile)
-  )[0] ?? regions[0];
+  const ranked = [...regions]
+    .map((region) => ({
+      region,
+      priority: regionPriority(region, regionStates, tendencyProfile, metrics),
+    }))
+    .sort((a, b) => b.priority - a.priority);
+
+  const candidates = ranked.slice(0, Math.min(6, ranked.length));
+  const floor = candidates[candidates.length - 1]?.priority ?? 0;
+  const total = candidates.reduce(
+    (sum, candidate, index) =>
+      sum +
+      Math.max(0.01, candidate.priority - floor + 0.06 + (candidates.length - index) * 0.025),
+    0
+  );
+
+  let cursor = Math.random() * total;
+  for (const candidate of candidates) {
+    cursor -= Math.max(0.01, candidate.priority - floor + 0.06);
+    if (cursor <= 0) return candidate.region;
+  }
+
+  return candidates[0]?.region ?? regions[0];
 }
 
 function regionPriority(
   region: RegionMetrics,
   regionStates: RegionState[],
-  tendencyProfile: TendencyProfile
+  tendencyProfile: TendencyProfile,
+  metrics: CanvasMetrics
 ) {
   const state = regionStates.find((entry) => entry.id === region.id);
   const tendency = tendencyProfile.favoredRegions[region.id] ?? 0;
+  const cx = region.x + region.w / 2;
+  const cy = region.y + region.h / 2;
+  const nx = metrics.canvasWidth > 0 ? (cx / metrics.canvasWidth) * 2 - 1 : 0;
+  const ny = metrics.canvasHeight > 0 ? (cy / metrics.canvasHeight) * 2 - 1 : 0;
+  const balancePull = (-metrics.balanceX * nx - metrics.balanceY * ny) * 0.38;
   return (
-    region.emptiness * 0.28 +
-    region.focalWeight * 0.3 +
-    (state?.neglect ?? 0) * 0.25 +
-    (state?.successScore ?? 0) * 0.12 +
-    tendency * 0.12 -
-    (state?.attention ?? 0) * 0.16
+    region.emptiness * 0.35 +
+    region.focalWeight * 0.2 +
+    (state?.neglect ?? 0) * 0.34 +
+    (state?.successScore ?? 0) * 0.06 +
+    tendency * 0.02 +
+    balancePull * 1.15 +
+    (Math.random() - 0.5) * 0.18 -
+    (state?.attention ?? 0) * 0.34
   );
 }
 
@@ -562,4 +639,12 @@ function formatDelta(value: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function topRegionKeys(map: Record<string, number>, limit: number, minScore: number) {
+  return Object.entries(map)
+    .filter(([, score]) => score >= minScore)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
 }

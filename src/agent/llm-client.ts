@@ -1,3 +1,5 @@
+import { llmConfigFromEnv } from "../lib/llm-env";
+
 export interface LLMConfig {
   endpoint: string;
   model: string;
@@ -20,18 +22,24 @@ interface OllamaTagsResponse {
 
 const DEFAULT_ENDPOINT = "http://localhost:11434";
 
+function resolvedKey(config: LLMConfig): string | undefined {
+  const k = config.apiKey?.trim() || llmConfigFromEnv().apiKey?.trim();
+  return k || undefined;
+}
+
 export async function chatCompletion(
   config: LLMConfig,
   messages: ChatMessage[]
 ): Promise<string> {
   const endpoint = config.endpoint || DEFAULT_ENDPOINT;
+  const apiKey = resolvedKey(config);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
-  if (config.apiKey) {
-    headers["Authorization"] = `Bearer ${config.apiKey}`;
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
   const res = await fetch(`${endpoint}/api/chat`, {
@@ -63,8 +71,9 @@ export async function listModels(
 ): Promise<string[]> {
   try {
     const headers: Record<string, string> = {};
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
+    const key = apiKey?.trim() || llmConfigFromEnv().apiKey?.trim();
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
     }
 
     const res = await fetch(`${endpoint}/api/tags`, { headers });
@@ -82,8 +91,9 @@ export async function checkConnection(
 ): Promise<boolean> {
   try {
     const headers: Record<string, string> = {};
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
+    const key = apiKey?.trim() || llmConfigFromEnv().apiKey?.trim();
+    if (key) {
+      headers["Authorization"] = `Bearer ${key}`;
     }
 
     const res = await fetch(`${endpoint}/api/tags`, {

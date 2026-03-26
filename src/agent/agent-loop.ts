@@ -1,15 +1,19 @@
 import type { CanvasEngine } from "../engine/canvas-engine";
-import { executeAction } from "../engine/action-executor";
+import { executeActionProgressive } from "../engine/action-executor";
 import { observeCanvas } from "./canvas-observer";
 import {
   createBurstMemory,
   planBurst,
   scoreBurst,
+  unstableMemorySnapshot,
 } from "./organism-brain";
 import { useAgentStore } from "../store/agent-store";
 import { useCanvasStore } from "../store/canvas-store";
-import { chatCompletion, type ChatMessage } from "./llm-client";
+import { chatCompletion, checkConnection, listModels, type ChatMessage } from "./llm-client";
 import { updateTendencyProfile } from "./tendency-profile";
+import { AGENT_SOUL } from "./soul";
+import { planBurstWithLLM } from "./llm-plan";
+import { introspectionPulse } from "./introspection";
 
 let running = false;
 let loopToken = 0;
@@ -28,6 +32,7 @@ export function pauseAgentLoop() {
 
 export function stopAgentLoop() {
   running = false;
+  useAgentStore.getState().setState("idle");
 }
 
 export async function stepAgentBurst(engine: CanvasEngine) {
@@ -47,12 +52,39 @@ async function runBurst(engine: CanvasEngine, manual = false) {
   if (!manual && (!running || store.state !== "running")) return;
 
   const before = observeCanvas(engine, canvasStore.history);
-  const plan = planBurst({
-    internal: store.internal,
-    config: store.config,
-    metrics: before,
-    critic: store.internal.critic,
-  });
+
+  store.addLog(introspectionPulse(store.internal, before), "thought");
+
+  let plan;
+  const llmConfig = await ensurePlannerConfig();
+  const critic = store.internal.critic;
+  if (llmConfig?.model) {
+    try {
+      plan = await planBurstWithLLM({
+        llmConfig,
+        internal: store.internal,
+        metrics: before,
+      });
+      store.addLog("remote mind shaped this burst", "thought");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "unable to generate plan";
+      store.addLog(`remote mind silent (${msg}) — instinct takes over`, "thought");
+      plan = planBurst({
+        internal: store.internal,
+        config: store.config,
+        metrics: before,
+        critic,
+      });
+    }
+  } else {
+    store.addLog("no model endpoint — I dream with local nerves only", "thought");
+    plan = planBurst({
+      internal: store.internal,
+      config: store.config,
+      metrics: before,
+      critic,
+    });
+  }
 
   store.addLog(plan.thought, "thought");
   store.addLog(`region ${plan.region.id} -> ${plan.actions.length} pixel actions`, "thought");
@@ -60,7 +92,7 @@ async function runBurst(engine: CanvasEngine, manual = false) {
   engine.pushSnapshot();
 
   for (const action of plan.actions) {
-    executeAction(engine, action);
+    await executeActionProgressive(engine, action);
     useCanvasStore.getState().pushAction(action, "agent");
     store.addLog(action.type, "action");
   }
@@ -74,17 +106,8 @@ async function runBurst(engine: CanvasEngine, manual = false) {
     actionCount: plan.actions.length,
   });
 
-  let rolledBack = false;
   const nextNegativeStreak =
     result.label === "hurt" ? store.internal.negativeStreak + 1 : 0;
-
-  if (result.score < -0.12 && nextNegativeStreak >= 2) {
-    engine.undo();
-    useCanvasStore.getState().rewindHistory(plan.actions.length);
-    rolledBack = true;
-    result = { ...result, rolledBack: true, label: "hurt", reason: `${result.reason}; rollback triggered` };
-    store.addLog("rollback after repeated damage", "thought");
-  }
 
   const memory = createBurstMemory(plan, result);
   const tendencyProfile = updateTendencyProfile(
@@ -92,6 +115,7 @@ async function runBurst(engine: CanvasEngine, manual = false) {
     memory,
     store.config.seedTheme
   );
+  const unstableMemory = unstableMemorySnapshot(tendencyProfile);
 
   store.updateInternal({
     tick: store.internal.tick + 1,
@@ -100,19 +124,22 @@ async function runBurst(engine: CanvasEngine, manual = false) {
     mood: plan.mood,
     dominantDrive: plan.dominantDrive,
     drives: plan.drives,
-    metrics: rolledBack ? before : after,
+    metrics: after,
     regionStates: plan.nextRegionStates,
     currentRegion: plan.region,
-    negativeStreak: rolledBack ? 0 : nextNegativeStreak,
+    negativeStreak: nextNegativeStreak,
     shortMemory: [...store.internal.shortMemory.slice(-49), memory],
     tendencyProfile,
     lastBurstResult: result,
     currentThought: result.reason,
+    obsessions: unstableMemory.obsessions,
+    grudges: unstableMemory.grudges,
+    forbiddenRegions: unstableMemory.forbiddenRegions,
   });
 
   store.addLog(
     `${result.label}: ${result.reason}`,
-    result.rolledBack ? "thought" : "critic"
+    "critic"
   );
 
   if (
@@ -129,6 +156,29 @@ async function runBurst(engine: CanvasEngine, manual = false) {
   }
 }
 
+async function ensurePlannerConfig() {
+  const store = useAgentStore.getState();
+  const envModel = import.meta.env.VITE_MODEL_NAME?.trim();
+  if (envModel) {
+    if (!store.llmConfig.model) store.setLLMConfig({ model: envModel });
+    return { ...useAgentStore.getState().llmConfig, model: envModel };
+  }
+  if (store.llmConfig.model) {
+    return store.llmConfig;
+  }
+
+  const connected = await checkConnection(store.llmConfig.endpoint, store.llmConfig.apiKey);
+  store.setOllamaConnected(connected);
+  if (!connected) return null;
+
+  const models = await listModels(store.llmConfig.endpoint, store.llmConfig.apiKey);
+  store.setAvailableModels(models);
+  if (models.length === 0) return null;
+
+  store.setLLMConfig({ model: models[0] });
+  return { ...useAgentStore.getState().llmConfig, model: models[0] };
+}
+
 async function runSlowCritic(token: number) {
   const store = useAgentStore.getState();
   const metrics = store.internal.metrics;
@@ -142,8 +192,11 @@ async function runSlowCritic(token: number) {
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content:
-        "You are a concise visual critic for an autonomous drawing organism. Respond in 1-2 short sentences. Focus on composition, variation, focal control, and restraint.",
+      content: [
+        AGENT_SOUL,
+        "You are evaluating the organism's own evolving canvas in real time.",
+        "Use the metrics and recent bursts to push the next image state toward stronger generative art.",
+      ].join("\n\n"),
     },
     {
       role: "user",
@@ -154,7 +207,7 @@ async function runSlowCritic(token: number) {
         `Summary: ${metrics.summary}`,
         "Recent bursts:",
         memorySummary || "none",
-        "Give one strategic adjustment and one warning.",
+        "Give the next artistic correction as the organism's interior voice.",
       ].join("\n"),
     },
   ];
@@ -180,12 +233,12 @@ function scheduleNext(engine: CanvasEngine, immediate = false) {
   const preset = useAgentStore.getState().config.speedPreset;
   const delay =
     immediate
-      ? 50
+      ? 10
       : preset === "slow"
-      ? 1500
+      ? 220
       : preset === "realtime"
-      ? 700
-      : 150;
+      ? 60
+      : 18;
 
   window.setTimeout(() => {
     if (!running) return;

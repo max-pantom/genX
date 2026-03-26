@@ -14,6 +14,7 @@ import {
   loadTendencyProfile,
   saveTendencyProfile,
 } from "../agent/tendency-profile";
+import { llmConfigFromEnv } from "../lib/llm-env";
 
 interface AgentStore {
   state: AgentState;
@@ -45,19 +46,15 @@ interface AgentStore {
 
 const defaultConfig: AgentConfig = {
   autonomy: 0.9,
-  intensity: 0.58,
-  speedPreset: "realtime",
-  burstMin: 3,
-  burstMax: 8,
+  intensity: 0.82,
+  speedPreset: "hyper",
+  burstMin: 10,
+  burstMax: 20,
   criticInterval: 6,
   seedTheme: "none",
 };
 
-const defaultLLMConfig: LLMConfig = {
-  endpoint: "http://localhost:11434",
-  model: "",
-  apiKey: "",
-};
+const defaultLLMConfig: LLMConfig = llmConfigFromEnv();
 
 function createInternal(config: AgentConfig, profile?: TendencyProfile) {
   return createInitialInternalState(profile ?? loadTendencyProfile(), config);
@@ -129,7 +126,7 @@ export const useAgentStore = create<AgentStore>((set) => ({
     set({
       state: "idle",
       config: defaultConfig,
-      llmConfig: defaultLLMConfig,
+      llmConfig: llmConfigFromEnv(),
       internal: createInternal(defaultConfig, freshProfile),
       logs: [],
       availableModels: [],

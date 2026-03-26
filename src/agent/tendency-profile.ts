@@ -6,6 +6,9 @@ export function createDefaultTendencyProfile(): TendencyProfile {
   return {
     preferredTheme: "none",
     favoredRegions: {},
+    obsessedRegions: {},
+    grudgeRegions: {},
+    forbiddenRegions: {},
     paletteDriftBias: 0.5,
     successfulActionPairs: {},
     totalBursts: 0,
@@ -23,6 +26,9 @@ export function loadTendencyProfile(): TendencyProfile {
       ...createDefaultTendencyProfile(),
       ...parsed,
       favoredRegions: parsed.favoredRegions ?? {},
+      obsessedRegions: parsed.obsessedRegions ?? {},
+      grudgeRegions: parsed.grudgeRegions ?? {},
+      forbiddenRegions: parsed.forbiddenRegions ?? {},
       successfulActionPairs: parsed.successfulActionPairs ?? {},
     };
   } catch {
@@ -45,6 +51,27 @@ export function updateTendencyProfile(
   memory: BurstMemory,
   nextTheme: TendencyProfile["preferredTheme"]
 ): TendencyProfile {
+  const decayedFavored: Record<string, number> = {};
+  for (const [id, score] of Object.entries(profile.favoredRegions)) {
+    const nextScore = score * 0.94;
+    if (Math.abs(nextScore) > 0.02) decayedFavored[id] = nextScore;
+  }
+  const decayedObsessions: Record<string, number> = {};
+  for (const [id, score] of Object.entries(profile.obsessedRegions)) {
+    const nextScore = score * 0.965;
+    if (Math.abs(nextScore) > 0.04) decayedObsessions[id] = nextScore;
+  }
+  const decayedGrudges: Record<string, number> = {};
+  for (const [id, score] of Object.entries(profile.grudgeRegions)) {
+    const nextScore = score * 0.97;
+    if (Math.abs(nextScore) > 0.04) decayedGrudges[id] = nextScore;
+  }
+  const decayedForbidden: Record<string, number> = {};
+  for (const [id, score] of Object.entries(profile.forbiddenRegions)) {
+    const nextScore = score * 0.98;
+    if (Math.abs(nextScore) > 0.06) decayedForbidden[id] = nextScore;
+  }
+
   const next = {
     ...profile,
     preferredTheme: nextTheme,
@@ -55,10 +82,31 @@ export function updateTendencyProfile(
       0.9
     ),
     favoredRegions: {
-      ...profile.favoredRegions,
+      ...decayedFavored,
       [memory.regionId]: clampRegionScore(
-        profile.favoredRegions[memory.regionId] ?? 0,
+        decayedFavored[memory.regionId] ?? 0,
         memory.score
+      ),
+    },
+    obsessedRegions: {
+      ...decayedObsessions,
+      [memory.regionId]: clampObsessScore(
+        decayedObsessions[memory.regionId] ?? 0,
+        memory.label === "helped" ? memory.score + 0.2 : -0.08
+      ),
+    },
+    grudgeRegions: {
+      ...decayedGrudges,
+      [memory.regionId]: clampGrudgeScore(
+        decayedGrudges[memory.regionId] ?? 0,
+        memory.label === "hurt" ? Math.abs(memory.score) + 0.2 : -0.04
+      ),
+    },
+    forbiddenRegions: {
+      ...decayedForbidden,
+      [memory.regionId]: clampForbiddenScore(
+        decayedForbidden[memory.regionId] ?? 0,
+        memory.label === "hurt" && memory.score < -0.12 ? 0.32 : -0.02
       ),
     },
     successfulActionPairs: { ...profile.successfulActionPairs },
@@ -85,4 +133,16 @@ function clampRegionScore(previous: number, score: number) {
 
 function clampPairScore(previous: number, score: number) {
   return clamp(previous * 0.88 + score * 0.35, -1, 2);
+}
+
+function clampObsessScore(previous: number, score: number) {
+  return clamp(previous * 0.92 + score * 0.42, -1, 3);
+}
+
+function clampGrudgeScore(previous: number, score: number) {
+  return clamp(previous * 0.93 + score * 0.4, -1, 3);
+}
+
+function clampForbiddenScore(previous: number, score: number) {
+  return clamp(previous * 0.95 + score, 0, 2);
 }

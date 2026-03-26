@@ -111,6 +111,9 @@ export interface BurstMemory {
 export interface TendencyProfile {
   preferredTheme: SeedThemeKey;
   favoredRegions: Record<string, number>;
+  obsessedRegions: Record<string, number>;
+  grudgeRegions: Record<string, number>;
+  forbiddenRegions: Record<string, number>;
   paletteDriftBias: number;
   successfulActionPairs: Record<string, number>;
   totalBursts: number;
@@ -158,4 +161,7 @@ export interface AgentInternalState {
   negativeStreak: number;
   lastBurstResult: BurstResult | null;
   currentThought: string;
+  obsessions: string[];
+  grudges: string[];
+  forbiddenRegions: string[];
 }

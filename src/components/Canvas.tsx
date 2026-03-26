@@ -1,188 +1,199 @@
-import { useRef, useEffect, useCallback, useMemo, useState } from "react";
-import { CanvasEngine, DISPLAY_PIXEL_SIZE } from "../engine/canvas-engine";
-import { zoomAt, clampViewport, fitToScreen } from "../engine/viewport";
-import { useCanvasStore } from "../store/canvas-store";
-import type { Viewport } from "../types/canvas";
+import { useRef, useEffect, useMemo, useState, useCallback } from "react";
+import { CanvasEngine } from "../engine/canvas-engine";
+import type { RGBAColor } from "../types/actions";
 
-interface CanvasProps {
-  onEngineReady: (engine: CanvasEngine) => void;
+interface PixelInfo {
+  x: number;
+  y: number;
+  color: RGBAColor;
 }
 
-export function Canvas({ onEngineReady }: CanvasProps) {
+interface CanvasProps {
+  color: RGBAColor;
+  onEngineReady: (engine: CanvasEngine) => void;
+  onHoverPixel: (pixel: PixelInfo | null) => void;
+  onActivePixelChange: (pixel: PixelInfo | null) => void;
+}
+
+const TARGET_PIXEL_SIZE = 16;
+
+export function Canvas({
+  color,
+  onEngineReady,
+  onHoverPixel,
+  onActivePixelChange,
+}: CanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
-  const panStartRef = useRef<{ x: number; y: number; vp: Viewport } | null>(null);
+  const isPaintingRef = useRef(false);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
-  const { viewport, isPanning, setViewport, setIsPanning } = useCanvasStore();
+  const grid = useMemo(() => {
+    if (containerSize.w <= 0 || containerSize.h <= 0) {
+      return { cols: 0, rows: 0, pixelSize: 0, displayWidth: 0, displayHeight: 0 };
+    }
 
-  const pixelFieldSize = useMemo(
-    () => ({
-      w: containerSize.w > 0 ? Math.max(120, Math.ceil(containerSize.w / DISPLAY_PIXEL_SIZE)) : 0,
-      h: containerSize.h > 0 ? Math.max(120, Math.ceil(containerSize.h / DISPLAY_PIXEL_SIZE)) : 0,
-    }),
-    [containerSize.h, containerSize.w]
-  );
+    const cols = Math.max(16, Math.floor(containerSize.w / TARGET_PIXEL_SIZE));
+    const rows = Math.max(16, Math.floor(containerSize.h / TARGET_PIXEL_SIZE));
+    const pixelSize = Math.max(
+      1,
+      Math.floor(Math.min(containerSize.w / cols, containerSize.h / rows))
+    );
 
-  const displayWidth = pixelFieldSize.w * DISPLAY_PIXEL_SIZE;
-  const displayHeight = pixelFieldSize.h * DISPLAY_PIXEL_SIZE;
+    return {
+      cols,
+      rows,
+      pixelSize,
+      displayWidth: cols * pixelSize,
+      displayHeight: rows * pixelSize,
+    };
+  }, [containerSize.h, containerSize.w]);
 
   useEffect(() => {
     if (!containerRef.current) return;
+
     const observer = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       setContainerSize({ w: width, h: height });
     });
+
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!canvasRef.current || containerSize.w <= 0 || containerSize.h <= 0 || engineRef.current) return;
+    if (!canvasRef.current || grid.cols <= 0 || grid.rows <= 0) return;
 
-    const logicalWidth = pixelFieldSize.w;
-    const logicalHeight = pixelFieldSize.h;
-    const engine = new CanvasEngine(canvasRef.current, logicalWidth, logicalHeight);
+    const engine = new CanvasEngine(canvasRef.current, grid.cols, grid.rows);
+    engine.clear("rgba(0, 0, 0, 0)");
+    engine.flush();
     engineRef.current = engine;
     onEngineReady(engine);
-    setViewport(
-      fitToScreen(
-        containerSize.w,
-        containerSize.h,
-        logicalWidth * DISPLAY_PIXEL_SIZE,
-        logicalHeight * DISPLAY_PIXEL_SIZE
-      )
-    );
-  }, [onEngineReady, pixelFieldSize.h, pixelFieldSize.w, setViewport]);
+    onHoverPixel(null);
+    onActivePixelChange(null);
+
+    return () => {
+      engineRef.current = null;
+    };
+  }, [grid.cols, grid.rows, onActivePixelChange, onEngineReady, onHoverPixel]);
+
+  const getPixelInfoFromEvent = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): PixelInfo | null => {
+      if (!containerRef.current || !engineRef.current || grid.pixelSize <= 0) return null;
+
+      const rect = containerRef.current.getBoundingClientRect();
+      const localX = event.clientX - rect.left - (rect.width - grid.displayWidth) / 2;
+      const localY = event.clientY - rect.top - (rect.height - grid.displayHeight) / 2;
+
+      if (
+        localX < 0 ||
+        localY < 0 ||
+        localX >= grid.displayWidth ||
+        localY >= grid.displayHeight
+      ) {
+        return null;
+      }
+
+      const x = Math.floor(localX / grid.pixelSize);
+      const y = Math.floor(localY / grid.pixelSize);
+      const [r, g, b, a] = engineRef.current.getPixel(x, y);
+
+      return {
+        x,
+        y,
+        color: { r, g, b, a },
+      };
+    },
+    [grid.displayHeight, grid.displayWidth, grid.pixelSize]
+  );
+
+  const paintPixel = useCallback(
+    (pixel: PixelInfo | null) => {
+      if (!pixel || !engineRef.current) return;
+
+      engineRef.current.setPixel(pixel.x, pixel.y, color.r, color.g, color.b, color.a);
+      engineRef.current.flush();
+      onActivePixelChange({
+        x: pixel.x,
+        y: pixel.y,
+        color: { ...color },
+      });
+    },
+    [color, onActivePixelChange]
+  );
 
   const handlePointerDown = useCallback(
-    (event: React.PointerEvent) => {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const pixel = getPixelInfoFromEvent(event);
+      if (!pixel) return;
 
-      panStartRef.current = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-        vp: { ...viewport },
-      };
-      setIsPanning(true);
-      (event.target as HTMLElement).setPointerCapture(event.pointerId);
+      if (event.button === 2) {
+        event.preventDefault();
+        onActivePixelChange(pixel);
+        return;
+      }
+
+      isPaintingRef.current = true;
+      paintPixel(pixel);
+      onHoverPixel(pixel);
+      event.currentTarget.setPointerCapture(event.pointerId);
     },
-    [setIsPanning, viewport]
+    [getPixelInfoFromEvent, onActivePixelChange, onHoverPixel, paintPixel]
   );
 
   const handlePointerMove = useCallback(
-    (event: React.PointerEvent) => {
-      if (!panStartRef.current || !engineRef.current) return;
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const pixel = getPixelInfoFromEvent(event);
+      onHoverPixel(pixel);
 
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      const dx = sx - panStartRef.current.x;
-      const dy = sy - panStartRef.current.y;
-
-      setViewport(
-        clampViewport(
-          {
-            ...panStartRef.current.vp,
-            offsetX: panStartRef.current.vp.offsetX + dx,
-            offsetY: panStartRef.current.vp.offsetY + dy,
-          },
-          containerSize.w,
-          containerSize.h,
-          engineRef.current.width * DISPLAY_PIXEL_SIZE,
-          engineRef.current.height * DISPLAY_PIXEL_SIZE
-        )
-      );
+      if (!isPaintingRef.current) return;
+      paintPixel(pixel);
     },
-    [containerSize.h, containerSize.w, setViewport]
+    [getPixelInfoFromEvent, onHoverPixel, paintPixel]
   );
 
   const handlePointerUp = useCallback(() => {
-    panStartRef.current = null;
-    setIsPanning(false);
-  }, [setIsPanning]);
+    isPaintingRef.current = false;
+  }, []);
 
-  const handleWheel = useCallback(
-    (event: React.WheelEvent) => {
-      if (!engineRef.current) return;
-      event.preventDefault();
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const sx = event.clientX - rect.left;
-      const sy = event.clientY - rect.top;
-      const nextViewport = zoomAt(viewport, sx, sy, event.deltaY);
-      setViewport(
-        clampViewport(
-          nextViewport,
-          containerSize.w,
-          containerSize.h,
-          engineRef.current.width * DISPLAY_PIXEL_SIZE,
-          engineRef.current.height * DISPLAY_PIXEL_SIZE
-        )
-      );
-    },
-    [containerSize.h, containerSize.w, setViewport, viewport]
-  );
-
-  useEffect(() => {
-    const keyDown = (event: KeyboardEvent) => {
-      if (event.key === " ") {
-        event.preventDefault();
-        setIsPanning(true);
-      }
-    };
-    const keyUp = (event: KeyboardEvent) => {
-      if (event.key === " ") {
-        setIsPanning(false);
-      }
-    };
-    window.addEventListener("keydown", keyDown);
-    window.addEventListener("keyup", keyUp);
-    return () => {
-      window.removeEventListener("keydown", keyDown);
-      window.removeEventListener("keyup", keyUp);
-    };
-  }, [setIsPanning]);
+  const gridStyle =
+    grid.pixelSize > 1
+      ? {
+          backgroundImage: [
+            `linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px)`,
+            `linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)`,
+          ].join(","),
+          backgroundSize: `${grid.pixelSize}px ${grid.pixelSize}px`,
+        }
+      : undefined;
 
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-0 overflow-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+      className="absolute inset-0 overflow-hidden bg-[#050816]"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      onWheel={handleWheel}
+      onPointerLeave={() => onHoverPixel(null)}
+      onContextMenu={(event) => event.preventDefault()}
       style={{ touchAction: "none" }}
     >
-      <div
-        className="absolute origin-top-left"
-        style={{
-          transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.zoom})`,
-          width: displayWidth,
-          height: displayHeight,
-          imageRendering: "pixelated",
-          overflow: "hidden",
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="block"
-          style={{ width: displayWidth, height: displayHeight }}
-        />
-      </div>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(63,94,251,0.15),_rgba(5,8,22,0.98)_68%)]" />
 
-      <div className="absolute top-18 left-4 rounded-full bg-black/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-white/80">
-        2x2 pixel field
-      </div>
-
-      <div className="absolute bottom-12 right-4 text-text-primary/24 text-[10px] font-bold select-none tabular-nums">
-        {Math.round(viewport.zoom * 100)}%
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div
+          className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0a1026] shadow-[0_30px_120px_rgba(0,0,0,0.55)]"
+          style={{ width: grid.displayWidth, height: grid.displayHeight }}
+        >
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 block h-full w-full"
+            style={{ imageRendering: "pixelated" }}
+          />
+          <div className="pointer-events-none absolute inset-0" style={gridStyle} />
+        </div>
       </div>
     </div>
   );
